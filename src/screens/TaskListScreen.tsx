@@ -1,5 +1,13 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, FlatList, TouchableOpacity, StyleSheet, Button } from 'react-native';
+import {
+  View,
+  Text,
+  FlatList,
+  TouchableOpacity,
+  StyleSheet,
+  SafeAreaView,
+  StatusBar,
+} from 'react-native';
 import { loadTasksFromStorage, saveTasksToStorage } from '../utils/storage';
 import type { Task, Priority } from '../types/types';
 import { useIsFocused, useNavigation } from '@react-navigation/native';
@@ -14,7 +22,6 @@ export const TaskListScreen: React.FC = () => {
 
   useEffect(() => {
     if (isFocused) loadAndRefreshTasks();
-
   }, [isFocused]);
 
   async function loadAndRefreshTasks() {
@@ -34,7 +41,7 @@ export const TaskListScreen: React.FC = () => {
     const priorityScore = (priority: Priority | undefined) => (priority === 'high' ? 3 : priority === 'medium' ? 2 : 1);
     const scoreA = priorityScore(taskA.priority);
     const scoreB = priorityScore(taskB.priority);
-    
+
     if (scoreA !== scoreB) return scoreB - scoreA;
 
     if (taskA.expireAt && taskB.expireAt) return new Date(taskA.expireAt).getTime() - new Date(taskB.expireAt).getTime();
@@ -60,28 +67,51 @@ export const TaskListScreen: React.FC = () => {
     await saveTasksToStorage(remainingTasks);
   }
 
+  function badgeStyle(priority: Priority) {
+  if (priority === 'high')
+    return { container: { backgroundColor: '#fff1f0' }, text: { color: '#dc2626' } };
+  if (priority === 'medium')
+    return { container: { backgroundColor: '#fffbeb' }, text: { color: '#b45309' } };
+  return { container: { backgroundColor: '#ecfdf5' }, text: { color: '#059669' } };
+}
+
   function renderTaskItem({ item }: { item: Task }) {
     return (
-      <View style={styles.itemContainer}>
+      <View style={styles.card}>
         <View style={{ flex: 1 }}>
-          <Text style={styles.title}>{item.title}</Text>
-          {item.expireAt ? <Text style={styles.expireAt}>{format(new Date(item.expireAt), "dd/MM/yyyy HH:mm")}</Text> : null}
+          <Text style={[styles.title, item.completed && styles.completedTitle]} numberOfLines={2}>
+            {item.title}
+          </Text>
+
+          {item.description ? (
+            <Text style={styles.description} numberOfLines={2}>
+              {item.description}
+            </Text>
+          ) : null}
+
+          {item.expireAt ? (
+            <Text style={styles.expireAt}>{format(new Date(item.expireAt), 'dd/MM/yyyy HH:mm')}</Text>
+          ) : (
+            <Text style={styles.expireAtPlaceholder}>Sem data</Text>
+          )}
         </View>
 
-        <View style={{ alignItems: 'flex-end' }}>
-          <Text style={[styles.badge, badgeStyle(item.priority || 'low')]}>{(item.priority || 'low').toUpperCase()}</Text>
+        <View style={{ alignItems: 'flex-end', marginLeft: 12 }}>
+          <View style={[styles.badge, badgeStyle(item.priority || 'low').container]}>
+            <Text style={[styles.badgeText, badgeStyle(item.priority || 'low').text]}>{(item.priority || 'low').toUpperCase()}</Text>
+          </View>
 
-          <View style={{ flexDirection: 'row', marginTop: 8 }}>
-            <TouchableOpacity onPress={() => toggleTaskCompletion(item.id)} style={styles.smallButton}>
-              <Text>{item.completed ? 'Desmarcar' : 'Concluir'}</Text>
+          <View style={styles.actionsRow}>
+            <TouchableOpacity onPress={() => toggleTaskCompletion(item.id)} style={styles.actionButton}>
+              <Text style={styles.actionText}>{item.completed ? 'Desmarcar' : 'Concluir'}</Text>
             </TouchableOpacity>
 
-            <TouchableOpacity onPress={() => navigation.navigate('Form' as any, { id: item.id })} style={styles.smallButton}>
-              <Text>Editar</Text>
+            <TouchableOpacity onPress={() => navigation.navigate('Form' as any, { id: item.id })} style={styles.actionButton}>
+              <Text style={styles.actionText}>Editar</Text>
             </TouchableOpacity>
 
-            <TouchableOpacity onPress={() => deleteTaskById(item.id)} style={styles.smallButton}>
-              <Text>Remover</Text>
+            <TouchableOpacity onPress={() => deleteTaskById(item.id)} style={[styles.actionButton, styles.removeButton]}>
+              <Text style={[styles.actionText, styles.removeText]}>Remover</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -92,43 +122,179 @@ export const TaskListScreen: React.FC = () => {
   const visibleTasks = taskList.filter((task) => (selectedFilter === 'all' ? true : task.priority === selectedFilter));
 
   return (
-    <View style={{ flex: 1, padding: 16 }}>
-      <View style={{ flexDirection: 'row', marginBottom: 12, justifyContent: 'space-between' }}>
-        <Button title="Criar" onPress={() => navigation.navigate('Form' as any)} />
+    <SafeAreaView style={styles.container}>
+      <StatusBar barStyle="dark-content" />
+      <View style={styles.headerRow}>
+        <Text style={styles.header}>Minhas tarefas</Text>
 
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
-          <Button title="Todas" onPress={() => setSelectedFilter('all')} />
-          <Button title="Alta" onPress={() => setSelectedFilter('high')} />
-          <Button title="Média" onPress={() => setSelectedFilter('medium')} />
-          <Button title="Baixa" onPress={() => setSelectedFilter('low')} />
-        </View>
+        <TouchableOpacity style={styles.createButton} onPress={() => navigation.navigate('Form' as any)}>
+          <Text style={styles.createButtonText}>+ Criar</Text>
+        </TouchableOpacity>
       </View>
 
-      <FlatList data={visibleTasks} keyExtractor={(task) => task.id} renderItem={renderTaskItem} />
-    </View>
+      <View style={styles.filtersRow}>
+        <TouchableOpacity style={[styles.filterPill, selectedFilter === 'all' && styles.filterPillActive]} onPress={() => setSelectedFilter('all')}>
+          <Text style={[styles.filterText, selectedFilter === 'all' && styles.filterTextActive]}>Todas</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity style={[styles.filterPill, selectedFilter === 'high' && styles.filterPillActive]} onPress={() => setSelectedFilter('high')}>
+          <Text style={[styles.filterText, selectedFilter === 'high' && styles.filterTextActive]}>Alta</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity style={[styles.filterPill, selectedFilter === 'medium' && styles.filterPillActive]} onPress={() => setSelectedFilter('medium')}>
+          <Text style={[styles.filterText, selectedFilter === 'medium' && styles.filterTextActive]}>Média</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity style={[styles.filterPill, selectedFilter === 'low' && styles.filterPillActive]} onPress={() => setSelectedFilter('low')}>
+          <Text style={[styles.filterText, selectedFilter === 'low' && styles.filterTextActive]}>Baixa</Text>
+        </TouchableOpacity>
+      </View>
+
+      <FlatList
+        data={visibleTasks}
+        keyExtractor={(task) => task.id}
+        renderItem={renderTaskItem}
+        contentContainerStyle={{ padding: 16, paddingBottom: 40 }}
+        ItemSeparatorComponent={() => <View style={{ height: 8 }} />}
+        ListEmptyComponent={() => (
+          <View style={styles.emptyContainer}>
+            <Text style={styles.emptyText}>Nenhuma tarefa encontrada.</Text>
+          </View>
+        )}
+      />
+    </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
-  itemContainer: {
-    flexDirection: 'row',
-    padding: 12,
-    borderRadius: 8,
-    backgroundColor: '#fff',
-    marginBottom: 8,
-    shadowColor: '#000',
-    shadowOpacity: 0.05,
-    shadowRadius: 6,
-    elevation: 1,
+  container: {
+    flex: 1,
+    backgroundColor: '#f6f7f9',
   },
-  title: { fontSize: 16, fontWeight: '600' },
-  expireAt: { fontSize: 12, color: '#666' },
-  badge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12, fontWeight: '700' },
-  smallButton: { marginLeft: 8, paddingHorizontal: 8, paddingVertical: 4 },
+  headerRow: {
+    paddingHorizontal: 16,
+    paddingTop: 18,
+    paddingBottom: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  header: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#111827',
+  },
+  createButton: {
+    backgroundColor: '#10b981',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 10,
+  },
+  createButtonText: {
+    color: '#fff',
+    fontWeight: '700',
+  },
+  filtersRow: {
+    flexDirection: 'row',
+    paddingHorizontal: 16,
+    gap: 8,
+    marginBottom: 6,
+  },
+  filterPill: {
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 999,
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#e6e9ee',
+  },
+  filterPillActive: {
+    backgroundColor: '#111827',
+    borderColor: '#111827',
+  },
+  filterText: {
+    color: '#374151',
+    fontWeight: '600',
+    fontSize: 13,
+  },
+  filterTextActive: {
+    color: '#fff',
+  },
+  card: {
+    flexDirection: 'row',
+    padding: 14,
+    borderRadius: 12,
+    backgroundColor: '#fff',
+    shadowColor: '#000',
+    shadowOpacity: 0.03,
+    shadowRadius: 10,
+    elevation: 2,
+    alignItems: 'center',
+  },
+  title: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#0f172a',
+  },
+  description: {
+    fontSize: 13,
+    color: '#4b5563',
+    marginTop: 6,
+    marginBottom: 6,
+  },
+  completedTitle: {
+    textDecorationLine: 'line-through',
+    color: '#9aa0a6',
+    fontWeight: '600',
+  },
+  expireAt: {
+    fontSize: 12,
+    color: '#6b7280',
+    marginTop: 6,
+  },
+  expireAtPlaceholder: {
+    fontSize: 12,
+    color: '#c4c8cc',
+    marginTop: 6,
+  },
+  badge: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+    marginBottom: 10,
+  },
+  badgeText: {
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  actionsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  actionButton: {
+    marginLeft: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    borderRadius: 8,
+    backgroundColor: 'transparent',
+  },
+  actionText: {
+    fontSize: 13,
+    color: '#374151',
+    fontWeight: '600',
+  },
+  removeButton: {
+    backgroundColor: 'transparent',
+  },
+  removeText: {
+    color: '#ef4444',
+  },
+  emptyContainer: {
+    marginTop: 48,
+    alignItems: 'center',
+  },
+  emptyText: {
+    color: '#9aa0a6',
+    fontSize: 15,
+  },
 });
-
-function badgeStyle(priority: Priority) {
-  if (priority === 'high') return { backgroundColor: '#ffdada', color: '#d00' } as any;
-  if (priority === 'medium') return { backgroundColor: '#fff4d6', color: '#c60' } as any;
-  return { backgroundColor: '#e6fff0', color: '#090' } as any;
-}
